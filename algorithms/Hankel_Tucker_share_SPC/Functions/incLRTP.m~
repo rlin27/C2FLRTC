@@ -1,0 +1,90 @@
+function [X, XR, V, VR, G, U, histo] = incLRTP(X0,T0, Q0, tau, R0, delta, rho, maxiter, nu, tol, verb)
+
+  Fnorm = @(Z) norm(Z(:));
+
+  N = ndims(T0);
+  T  = size(T0);
+  TT = numel(T0);
+
+  Ni = 2*N;
+  [v0, S] = DE_tensor_all(ones(T),tau,[]);
+  T2 = size(v0);
+  if mod(length(T2),2)
+    T2 = [T2 1];
+  end
+  D  = DE_tensor_all_adjoint(v0,S);
+
+  QQ   = DE_tensor_all(Q0,tau,S);
+  Vms  = DE_tensor_all(T0,tau,S);
+  V    = DE_tensor_all(X0,tau,S);
+  V(QQ==1) = Vms(QQ==1);
+
+  Vnorm = norm(Vms(QQ(:)==1))^2;
+
+  R    = R0;
+  VR   = prox_hosvd(V,R);
+  
+  VRp= VR;
+  obj = (norm(V(QQ(:)==1) - VR(QQ(:)==1))^2)/Vnorm;
+  
+  bestiter = 1;
+  flag = 0;
+  for iter = 1:maxiter
+            
+    % update Vlr
+    VRp = VR;
+    if rho == 0
+      [VR G U] = prox_hosvd(V,R);
+    else
+      [VR G U] = prox_horsvd(V,R,rho);
+    end
+
+    % update V
+    Vp = V;
+    V(QQ==0) = VR(QQ==0);
+    %V(QQ==0) = 2*VR(QQ==0) - VRp(QQ==0);
+      
+    obj2 = (norm(V(QQ(:)==1) - VR(QQ(:)==1))^2)/Vnorm;
+    histo(iter) = obj2;
+
+    conv_rate = abs(obj - obj2)/max(obj2 - delta,1e-10);
+    if flag == 0 & conv_rate < nu
+      for n = 1:Ni
+        Er(n) = Fnorm(tmult(V,eye(T2(n))-U{n}*U{n}',n,size(V)));
+      end
+      [val n_inc] = max(Er);
+      R(n_inc) = R(n_inc) + 1;
+    end
+    
+    %dv = norm(Vp(:) - V(:))^2;
+    %dvr = norm(VRp(:) - VR(:))^2;
+
+    if obj2 <= min(histo)
+      bestiter = iter;
+      Vest = V;
+      VRest = VR;
+    end
+    
+    if mod(iter,verb) == 0
+      fprintf('iter %d :: obj = %f :: conv_r= %e :: R=[',iter,obj2,conv_rate);
+      for n = 1:Ni
+        fprintf('%d ',R(n));
+      end
+      fprintf('] \n');
+    end
+
+    if obj2 < delta
+      flag = 1;
+    end
+    
+    if flag == 1 & abs(obj-obj2) < tol
+      break;
+    else
+      obj = obj2;
+    end
+    
+  end
+  X   = DE_tensor_all_adjoint(V,S) ./ D;
+  XR  = DE_tensor_all_adjoint(VR,S) ./ D;
+
+  

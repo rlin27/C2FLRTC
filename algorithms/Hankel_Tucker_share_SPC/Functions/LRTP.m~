@@ -1,0 +1,66 @@
+function [X, V, VR, histo] = LRTP(X0, T0, Q0, tau, R, maxiter, tol, verb)
+
+  N = ndims(X0);
+  T  = size(X0);
+  TT = numel(X0);
+
+  Ni = 2*N;
+  [v0, S] = DE_tensor_all(ones(T),tau,[]);
+  T2 = size(v0);
+  if mod(length(T2),2)
+    T2 = [T2 1];
+  end
+  D  = DE_tensor_all_adjoint(v0,S);
+
+  QQ   = DE_tensor_all(Q0,tau,S);
+  Vms  = DE_tensor_all(T0,tau,S);
+  V    = DE_tensor_all(X0,tau,S);
+  V(QQ==1) = Vms(QQ==1);
+  VR   = prox_hosvd(V,R);
+  
+  VRp= VR;
+  obj = norm(V(:) - VR(:))^2;
+  
+  bestiter = 1;
+  for iter = 1:maxiter
+      
+    % update V
+    Vp = V;
+    V(QQ==0) = VR(QQ==0);
+    %V(QQ==0) = 2*VR(QQ==0) - VRp(QQ==0);
+      
+    % update Vlr
+    VRp = VR;
+    %VR  = prox_hosvd(2*V - Vp,R);
+    VR = prox_hosvd(V,R);
+      
+    obj2 = norm(V(:) - VR(:))^2;
+    histo(iter) = obj2;
+    
+    dv = norm(Vp(:) - V(:))^2;
+    dvr = norm(VRp(:) - VR(:))^2;
+
+    if obj2 <= min(histo)
+      bestiter = iter;
+      Vest = V;
+      VRest = VR;
+    end
+    
+    if mod(iter,verb) == 0
+      fprintf('iter %d :: obj = %d :: dv = %e :: dvr = %e :: %d \n',iter,obj2,dv,dvr,bestiter);
+    end
+
+    if dv + dvr < tol
+      break;
+    else
+      obj = obj2;
+    end
+    
+    if iter > 100 & obj2 > 1.5*min(histo)
+      V = Vest;
+      VR = VRest;
+      break;
+    end
+
+  end
+  X   = DE_tensor_all_adjoint(V,S) ./ D;

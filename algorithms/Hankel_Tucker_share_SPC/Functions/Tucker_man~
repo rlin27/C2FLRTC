@@ -1,0 +1,51 @@
+function [X, G, U, histo] = Tucker_man(T,Q,G,U,maxiter, tol, verb)
+
+  sym = @(Z) (Z+Z')/2;
+  skew= @(Z) (Z-Z')/2;
+  inp = @(Z,Zt) Z(:)'*Zt(:);
+  Ret = @(A) A*(A'*A)^(-0.5);
+
+  N  = length(U);
+  for n = 1:N
+    II(n) = size(U{n},1);
+    R(n) = size(U{n},2);
+  end
+
+  X = tensor_allprod(G,U,0,R);
+  obj = norm(T(Q(:)==1) - X(Q(:)==1))^2;
+
+  for iter = 1:maxiter
+
+    S = 2*(Q.*(X-T));
+    dG= tensor_allprod(S,U,1,II);
+    dX= tensor_allprod(dG,U,0,R);
+    for n = 1:N
+      Gn{n} = unfold(G,n);
+      GGn{n}= Gn{n}*Gn{n}';
+      invGGn{n}= inv(GGn{n});
+      C  = -2*sym(GGn{n}*(unfold(dG,n)*Gn{n}'));
+      B{n} = lyap(GGn{n},C);
+      dU{n}= unfold(tensor_allprod_exc(S,U,1,n,II),n)*Gn{n}'*invGGn{n} - U{n}*B{n}*invGGn{n};
+      IIexc = II; IIexc(n) = R(n);
+      dX   = dX + tmult(tensor_allprod_exc(G,U,0,n,R),dU{n},n,IIexc);
+    end
+    s = 0.5*inp(S,Q.*dX)/ sum(dX(Q(:)==1).^2) ;
+    G = G - s*dG;
+    for n = 1:N
+      U{n} = Ret(U{n} - s*dU{n});
+    end
+    X = tensor_allprod(G,U,0,R);
+    obj2 = norm(T(Q(:)==1) - X(Q(:)==1))^2;
+
+    if mod(iter,verb) == 0
+      fprintf('iter %d:: %e :: %e \n',iter,obj2,abs(obj2-obj));fflush(1);
+    end
+    if abs(obj2 - obj) < tol
+      break;
+    else
+      obj = obj2;
+    end
+
+  end
+
+

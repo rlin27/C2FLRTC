@@ -1,0 +1,122 @@
+function [X, histo, PPk, DDk, GAM1, GAM2, Dp, Cd] = LHSTrec_eco_sigbox_admm(X0, T0, Q0, tau, w, Bmin, Bmax, sig, Gam, rho_t, maxiter, tol, verb)
+
+gam1 = Gam(1);
+gam2 = Gam(2);
+
+N = ndims(X0);
+T  = size(X0);
+TT = prod(T);
+
+% definition of inner function
+H   = @(X,n) tensor_delayembedsegments(X,n,tau);
+Ht  = @(Z,n) tensor_delayexpandsegments(Z,n,tau,T);
+inp = @(x,y) x(:)'*y(:);
+Pdom= @(X,Bmin,Bmax) max( min( X, Bmax), Bmin);
+nrm2= @(X) norm(X(:))^2;
+csum= @(Z) sum(cat(ndims(Z{1})+1,Z{:}),ndims(Z{1})+1);
+c2t = @(Z) cat(ndims(Z{1})+1,Z{:});
+c2vc= @(Z) cellfun(@(X) X(:),Z,'Uni',false);
+c2vs= @(Z) cat(1,Z{:});
+c2v = @(Z) c2vs(c2vc(Z));
+Pg  = @(gam) min(1e3,max(1e-5,gam));
+
+% initialization
+if verb
+    fprintf('Initialization \n');
+end
+X = X0;
+for n = 1:N
+    Z{n}   = H(X,n);
+    HX{n}  = Z{n};
+    HXp{n} = Z{n};
+    HtZ{n} = Ht(Z{n},n);
+    HtZp{n}= HtZ{n};
+    dZ{n}= zeros(size(Z{n}));
+end
+Y = X;
+
+eta_p = 1.01;
+eta_d = 1.01;
+
+% main iteration
+for iter = 1:maxiter
+
+  HXp= HX;
+  Xp = X;
+  X  = prox_indicator(X - gam1*(Y + csum(HtZ)), T0, Q0, sig);
+  dX = Xp - X;
+  Xt = X  - dX;
+
+  Yp = Y;
+  Yt = Y + gam2*Xt;
+  Y  = Yt - gam2*Pdom(Yt/gam2,Bmin,Bmax);
+  dY = Yp - Y;
+
+  HtZp = HtZ;
+  for n = 1:N
+    Zp    = Z{n};
+    HX{n} = H(X,n);
+    Zt = Zp + gam2*(2*HX{n} - HXp{n});
+    Z{n}  = Zt - gam2*prox_nuc(Zt/gam2,w(n)/gam2);
+    HtZ{n}= Ht(Z{n},n);
+    dZ{n} = Zp - Z{n};
+  end
+
+  % check
+  P  = dX/gam1 - dY - sum(c2t(HtZp) - c2t(HtZ),N+1);
+  pk = norm(P(:));
+  Wp = inp(dX,P)/norm(dX(:))/pk;
+
+  Dy  = dY/gam2 - dX;
+  Dz  = c2v(dZ)/gam2 - (c2v(HXp) - c2v(HX));
+  dk  = sqrt(nrm2(Dy) + nrm2(Dz));
+  Wd  = (inp(dY,Dy) + inp(c2v(dZ),Dz))/sqrt(nrm2(dY)+nrm2(c2v(dZ)))/dk;
+
+  GAM1(iter)= gam1;
+  GAM2(iter)= gam2;
+  Cp(iter)  = Wp;
+  Cd(iter)  = Wd;
+  PPk(iter) = pk;
+  DDk(iter) = dk;
+  pdr(iter) = pk/dk;
+
+  if Cp(iter) < 0
+    gam1 = gam1*0.9;
+    eta_p= eta_p^0.1;
+  elseif Cp(iter) > 0.9
+    gam1 = gam1*eta_p;
+  else
+    %
+  end
+  if  Cd(iter) < 0
+    gam2 = gam2*0.9;
+    eta_d= eta_d^0.1;
+  elseif Cd(iter) > 0.9
+    gam2 = gam2*eta_d;
+  else
+    %
+  end
+
+  rnd = 1.0;
+  gam1 = Pg((gam1)*( pdr(iter)^(rho_t*rnd) ));
+  gam2 = Pg((gam2)/( pdr(iter)^(rho_t*rnd) ));
+
+
+  histo(iter) = (pk + dk)/N/TT;
+  if histo(iter)< tol
+    break;
+  end
+  if mod(iter,verb) == 0
+    fprintf('iter %d :: pk=%e :: dk=%e :: pdr=%e :: GAM=[%e,%e]\n',iter,pk,dk,pdr(iter),GAM1(iter),GAM2(iter));
+  end
+
+  
+
+end  
+
+
+
+
+
+
+

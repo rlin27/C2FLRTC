@@ -1,0 +1,17 @@
+function [X G U] = prox_hosvd(Y,R)
+
+  N  = ndims(Y);
+  II = size(Y);
+
+  for n = 1:N
+    if R(n) < II(n)
+      Yn = unfold(Y,n);
+      [U{n} d v] = svds(Yn*Yn',R(n));
+    else
+      U{n} = speye(II(n));
+    end
+  end
+  G = tensor_allprod(Y,U,1,II);
+  X = tensor_allprod(G,U,0,R);
+
+  

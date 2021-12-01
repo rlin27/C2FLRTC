@@ -1,0 +1,23 @@
+function X = my_lyap(X,A,Q)
+
+  H = @(Z) A*Z + Z*A';
+  inp = @(Z,Zt) Z(:)'*Zt(:);
+  b = -Q;
+
+  r = b - H(X);
+  p = r;
+  rsold = inp(r,r);
+
+  for ii = 1:length(b(:))
+    Ap = H(p);
+    alpha = rsold / inp(p,Ap);
+    X = X + alpha * p;
+    r = r - alpha * Ap;
+    rsnew = inp(r,r);
+    if sqrt(rsnew) < 1e-10
+      break;
+    end
+    p = r + (rsnew / rsold) * p;
+    rsold = rsnew;
+  end
+  

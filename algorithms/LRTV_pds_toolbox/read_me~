@@ -1,0 +1,19 @@
+------------------------------------------------------
+You can try just run the
+
+DEMO_color_image.m
+
+------------------------------------------------------
+For set up, we can add path by the following sentence.
+
+addpath('Functions_LRTV');
+
+  -- LRTV_pds.m       : main code to run tensor completion
+  -- LRTV_pds_light.m : little bit light mode (skip objective calculation)
+  -- unfold.m         : tensor unfolding from tensor to matrix
+  -- fold.m           : tensor folding from matrix to tensor
+  -- prox_nuc.m       : proximal operator with respect to nuclear norm
+  -- prox_dom.m       : proximal operator with respect to box constraint
+  -- prox_l12norm.m   : proximal operator with respect to l12-norm
+  -- prox_indicator.m : proximal operator with respect to noise inequality constraint
+

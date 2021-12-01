@@ -1,0 +1,71 @@
+function [X] = multiHK_QV_TV_recovery_vector_pds(X, X0, Q0, w, tau, lam_qv, lam_tv, Dom, sig, Gam, maxiter, tol, verb)
+
+X = X(:);
+X0= X0(:);
+Q0= Q0(:);
+
+gam1    = Gam(1);
+gam2    = Gam(2);
+
+if length(w) ~= length(tau)
+  error('length of w and tau should be same.');
+end
+
+%% initialize
+Nj = length(w);
+H  = @(X,nj) DEvec(X,tau(nj));
+Ht = @(Gn,nj) DEvec_ad(Gn);
+prox_dom = @(X) min(max(X,Dom{1}),Dom{2});
+L  = @(z) z([2:end, end-1],:) - z;
+Lt = @(z) [-z(1,:); z(1:end-3,:) - z(2:end-2,:); z(end-2,:) - z(end-1,:) + z(end,:); z(end-1,:)-z(end,:)];
+prox_l1  = @(X,lam) sign(X) .* max(abs(X)-lam,0);
+
+HtGsum = zeros(size(X));
+for nj = 1:Nj
+  G{nj} = H(X,nj);
+  HtGsum = HtGsum + Ht(G{nj},nj);
+end
+
+U = prox_dom(X);
+Y = L(X);
+Z = L(X);
+
+for iter = 1:maxiter
+
+  % for X
+  Xp = X;
+  X  = prox_indicator(X -gam1*(U + HtGsum + Lt(Y+Z)), X0, Q0, sig);
+  dX = 2*X - Xp;
+
+  % for U
+  Up = U  + gam2*dX;
+  U  = Up - gam2*prox_dom(Up/gam2);
+
+  % for G
+  HtGsum(:) = 0;
+  for nj = 1:Nj
+    Gp{nj} = G{nj}  + gam2*H(dX,nj);
+    G{nj}  = Gp{nj} - gam2*prox_nuc(Gp{nj}/gam2, w(nj)/gam2);
+    HtGsum = HtGsum + Ht(G{nj},nj);
+  end
+
+  % for Y
+  Yp = Y + gam2*L(dX);
+  Y  = lam_qv/(lam_qv+gam2)*Yp;
+
+  % for Z
+  Zp = Z + gam2*L(dX);
+  Z  = Zp- gam2*prox_l1(Zp/gam2, lam_tv/gam2);
+
+  % conv. check
+  dx = mean((X(:) - Xp(:)).^2);
+  if verb & mod(iter,100)==0
+    fprintf('%d :: %e \n',iter,dx);
+  end
+  if dx < tol
+    break;
+  end 
+
+end
+
+

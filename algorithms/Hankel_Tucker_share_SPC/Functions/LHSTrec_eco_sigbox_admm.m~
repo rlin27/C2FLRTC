@@ -1,0 +1,123 @@
+function [X, histo] = LHSTrec_eco_sigbox_admm(X0, T0, Q0, tau, w, Bmin, Bmax, sig, Rho, maxiter, tol, verb)
+% Low-rank Hankel structured tensor reconstruction
+
+mu    = Rho(1);
+rho   = Rho(2);
+maxmu = Rho(3);
+
+N  = ndims(X0);
+T  = size(X0);
+
+%if N == 2 && size(X0,2) == 1
+%    N = 1;
+%end
+
+% preperation
+if verb
+    fprintf('Preparation \n')
+end
+A = 2*ones(size(X0));
+for n = 1:N
+    Z{n} = tensor_delayembedsegments(ones(size(X0)),n,tau);
+    Xc = tensor_delayexpandsegments(Z{n},n,tau,T);
+    %[ Z{n}, S{n} ] = DE_tensor_one( ones(size(X0)), n, tau, []);
+    %Xc = DE_tensor_one_adjoint( Z{n}, n, T, S{n} );
+    D{n} = Xc;
+    A = A + D{n};
+end
+
+H   = @(X,n) tensor_delayembedsegments(X,n,tau);
+Ht  = @(Z,n) tensor_delayexpandsegments(Z,n,tau,T);
+%H   = @(X,n) DE_tensor_one( X, n, tau, S{n});
+%Ht  = @(Z,n) DE_tensor_one_adjoint( Z, n, T, S{n} );
+HtH = @(X,n) D{n}.*X;
+
+inp = @(x,y) x(:)'*y(:);
+
+% initialization
+if verb
+    fprintf('Initialization \n');
+end
+X = X0; b = zeros(size(X)); Ax = zeros(size(X));
+for n = 1:N
+    Z{n} = H(X,n);
+    HX{n}= Z{n};
+    Lam{n} = zeros(size(Z{n}));
+end
+Y = X;
+Gam = zeros(size(Y));
+V = X;
+Eta = zeros(size(V));
+
+% check condition
+C1 = Bmin <= X; 
+C2 = X <= Bmax;
+de = (norm(T0(Q0(:)==1)-X(Q0(:)==1))^2 - sig);
+C3 = de < tol;
+condition = prod(C1(:))*prod(C2(:))*C3;
+ratio = mean(C1(:))*mean(C2(:));
+
+
+if verb
+    fprintf('#iter, Diff(X_k+1,X_k), Diff(X,Y), Diff(X,V), Diff(Hn(X),Zn), Condition(satisfy, ratio), mu \n');
+end
+
+for iter = 1:maxiter
+    
+    % For Z
+    for n = 1:N
+        HX{n} = H(X,n); 
+        Lam{n}= Lam{n} + mu*(Z{n}-HX{n}); dz(n) = norm( (Z{n}(:) - HX{n}(:))); %dz(n) = norm(Lam{n}(:) .* (Z{n}(:) - HX{n}(:)),1);
+        Z{n}  = prox_nuc(HX{n} - Lam{n}/mu, w(n)/mu);
+        %Z{n} = multiplicativeSingularValueThresholding(HX{n} - Lam{n}/mu, w(n)/mu, 'subsample', 1);
+        if verb == 2
+            fprintf('s');
+        end
+    end
+
+    % For Y
+    Gam = Gam + mu*(Y-X); dy = norm( (Y(:) - X(:)) ); %dy = norm( Gam(:) .* (Y(:) - X(:)),1);
+    Y   = max(min( X - Gam/mu, Bmax), Bmin);
+    
+    % For V
+    Eta = Eta + mu*(V-X); dv = norm( V(:) - X(:) );
+    V   = prox_indicator(X - Eta/mu,T0,Q0,sig);
+    
+    % For X
+    Xp = X;
+    b  = Y + Gam/mu + V + Eta/mu;
+    for n = 1:N
+        b = b + Ht( Z{n} + Lam{n}/mu, n );
+    end
+    X = b ./ A;
+    dx = norm(Xp(:) - X(:));    
+
+    % conditions
+    C1 = Bmin <= X; 
+    C2 = X <= Bmax;
+    de = (norm(T0(Q0(:)==1)-X(Q0(:)==1))^2 - sig);
+    C3 = de < tol;    
+    condition = prod(C1(:))*prod(C2(:))*C3;
+    ratio = mean(C1(:))*mean(C2(:));
+    
+    if verb
+      %if mod(iter,10) == 0
+      fprintf('iter %d :: %e :: %e :: %e :: %e :: %e :: %f :: %e \n',iter,dx,dy,dv,mean(dz),de,ratio,mu);
+      %end
+    end
+    histo(iter) = dx;
+
+    if dx < tol & dy < tol & mean(dz) < tol & condition == 1
+      break;
+    else
+      mu  = min(rho*mu,maxmu);
+    end
+
+    %if iter > 100 
+    %    if mean(abs(diff(histo(end-30:end)))) < tol
+    %        break;
+    %    end
+    %end
+    
+end
+    

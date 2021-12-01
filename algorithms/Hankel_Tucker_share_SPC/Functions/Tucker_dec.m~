@@ -1,0 +1,31 @@
+function [X, G, U] = Tucker_dec(T,G,U,maxiter,tol,verb)
+
+  N  = length(U);
+  for n = 1:N
+    II(n) = size(U{n},1);
+    R(n) = size(U{n},2);
+  end
+
+  X = tensor_allprod(G,U,0,R);
+  obj = (1/prod(II))*norm(T(:) - X(:))^2;
+
+  for iter = 1:maxiter
+   
+    for n = 1:N
+      Zn{n} = unfold(tensor_allprod_exc(T,U,1,n,II),n);
+      [U{n}, ~,~] = svds(Zn{n}*Zn{n}',R(n));
+    end
+    G = tensor_allprod(T,U,1,II);
+    X = tensor_allprod(G,U,0,R);
+    obj2 = (1/prod(II))*norm(T(:) - X(:))^2;
+ 
+    if mod(iter,verb) == 0
+      fprintf('iter %d:: %e :: %e \n',iter,obj2,abs(obj2-obj));%fflush(1);
+    end
+    if iter > 10 & abs(obj2 - obj) < tol
+      break;
+    else
+      obj = obj2;
+    end
+
+  end

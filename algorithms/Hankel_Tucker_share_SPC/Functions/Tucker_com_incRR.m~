@@ -1,0 +1,72 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%
+%
+% This code was written by Tatsuya Yokota (2017.08.28)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function [X, G, U, histo] = Tucker_com_incRR(T,Q,G,U,delta,incRR,maxiter,inloop,tol,verb)
+
+  N  = length(U);
+  for n = 1:N
+    II(n) = size(U{n},1);
+    R(n) = size(U{n},2);
+  end
+
+  T = Q.*T;
+  GU= tensor_allprod(G,U,0,R);
+
+  obj = (1/sum(Q(:)))*norm(T(Q(:)==1) - GU(Q(:)==1))^2;
+
+  Z  = T;
+  Ri = ones(1,N);
+  for iter = 1:maxiter
+
+    % update parameters
+    Z(Q(:)~=1) = GU(Q(:)~=1);
+    for iter2 = 1:inloop
+    for n = 1:N
+      Y{n} = unfold(tensor_allprod_exc(Z,U,1,n,II),n);
+      [U{n},~,~] = svds(Y{n}*Y{n}',R(n));
+    end
+    end
+    G = tensor_allprod(Z,U,1,II);
+    GU= tensor_allprod(G,U,0,R);
+
+    % calc. cost function
+    obj2 = (1/sum(Q(:)))*norm(T(Q(:)==1) - GU(Q(:)==1))^2;
+    histo(iter) = obj2;
+
+    % show process
+    if mod(iter,verb) == 0
+      fprintf('iter %d:: cost = %e :: cost_diff = %e :: R=[',iter,obj2,abs(obj2-obj));
+      for n = 1:N
+        fprintf('%d ',R(n));
+      end
+      fprintf('] \n');
+    end
+
+    % check rank increment condition
+    if abs(obj2 - obj) < tol
+      
+      % calc. mode residual
+      dX = Q.*(T-GU);
+      for n = 1:N
+        E{n} = tensor_allprod_exc(dX,U,1,n,II);
+        mode_residual(n) = norm(E{n}(:));
+      end
+      [value idd] = max(mode_residual);
+      Ri(idd)= min(length(incRR{idd}),Ri(idd) + 1);
+      R(idd) = min(II(idd),incRR{idd}(Ri(idd)));
+      
+    else
+      obj = obj2;
+    end
+
+    % check termination condition
+    if obj2 < delta
+      break;
+    end
+
+  end
+
+

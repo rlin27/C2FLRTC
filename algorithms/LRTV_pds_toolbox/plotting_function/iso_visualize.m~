@@ -1,0 +1,13 @@
+function [p] = iso_visualize(Z,iso);
+
+[d1 d2 d3] = size(Z);fprintf('.');
+[x, y, z] = meshgrid (1:d1, 1:d2, 1:d3);fprintf('.');
+
+view (120, 30);fprintf('.');
+p = patch(isosurface (x, y, z, Z, 1.0));fprintf('.');
+isonormals(x,y,z, Z, p)
+set(p, 'FaceColor', 'green', 'EdgeColor', 'none');
+daspect([1 1 1]); axis tight; 
+colormap(prism(28))
+camlight; lighting phong
+

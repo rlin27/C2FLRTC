@@ -1,0 +1,15 @@
+function [X G U] = prox_horsvd(Y,R,rho)
+
+  N  = ndims(Y);
+  II = size(Y);
+
+  for n = 1:N
+    Yn = unfold(Y,n);
+    NN = size(Yn,2);
+    ID = randperm(NN);
+    [U{n} d v] = rsvd(Yn(:,ID(1:round(rho*NN)))*Yn(:,ID(1:round(rho*NN)))',R(n));
+  end
+  G = tensor_allprod(Y,U,1);
+  X = tensor_allprod(G,U,0);
+
+  

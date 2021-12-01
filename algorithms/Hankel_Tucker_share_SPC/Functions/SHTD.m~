@@ -1,0 +1,35 @@
+function [X, G, A, histo] = SHTD(X0, T0, Q0, tau, lam, mu0, maxiter, tol, verb)
+
+  N = ndims(X0);
+  T  = size(X0);
+  TT = numel(X0);
+
+  Ni = 2*N;
+  [v0, S] = DE_tensor_all(ones(T),tau,[]);
+  T2 = size(v0);
+  if mod(length(T2),2)
+    T2 = [T2 1];
+  end
+  D  = DE_tensor_all_adjoint(v0,S);
+
+  % initialization
+  mu = mu0;
+
+  Vms = DE_tensor_all(T0,tau,S);
+  W   = DE_tensor_all(Q0,tau,S);
+  W   = W ./ sqrt(DE_tensor_all(D,tau,S));
+  V   = DE_tensor_all(X0,tau,S);  
+  for n = 1:Ni
+    Vn = unfold(V,n);
+    [A{n} d v] = svd(Vn*Vn');
+  end
+  G = tensor_allprod(V,A,1);
+  Vtd = tensor_allprod(G,A,0);
+
+  E = V - Vtd;
+  obj = 0.5*norm(E(:))^2  + lam*sum(abs(G(:)));
+
+  % main iteration
+  
+  
+  

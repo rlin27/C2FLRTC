@@ -1,0 +1,132 @@
+function [X] = multiHK_QV_TV_recovery_vector_pds(X, X0, Q0, w, tau, lam_qv, lam_tv, Dom, sig, Gam, maxiter, tol, verb)
+
+X = X(:);
+X0= X0(:);
+Q0= Q0(:);
+
+al      = 0.95;
+gam1    = Gam(1);
+gam2    = Gam(2);
+
+if length(w) ~= length(tau)
+  error('length of w and tau should be same.');
+end
+
+%% initialize
+T  = length(X);
+Nj = length(w);
+H  = @(X,nj) DEvec(X,tau(nj));
+Ht = @(Gn,nj) DEvec_ad(Gn);
+prox_dom = @(X) min(max(X,Dom{1}),Dom{2});
+D  = sparse([-eye(T-1) zeros(T-1,1)] + [zeros(T-1,1) eye(T-1)]);
+%L  = @(z) z([2:end, end-1],:) - z;
+%Lt = @(z) [-z(1,:); z(1:end-3,:) - z(2:end-2,:); z(end-2,:) - z(end-1,:) + z(end,:); z(end-1,:)-z(end,:)];
+L  = @(z) D*z;
+Lt = @(z) D'*z;
+prox_l1  = @(X,lam) sign(X) .* max(abs(X)-lam,0);
+inp = @(x,y) x(:)'*y(:);
+
+T2  = T-1;
+D2  = [-eye(T2-1) zeros(T2-1,1)] + [zeros(T2-1,1) eye(T2-1)];
+%for tt = 2:10
+%  dd = [-eye(T2-tt) zeros(T2-tt,tt)] + [zeros(T2-tt,tt) eye(T2-tt)];
+%  D2 = [D2; dd];
+%end
+DD  = sparse(D2*D);
+
+Lqv = @(z) DD*z;
+Lqvt= @(z) DD'*z;
+Ltv = @(z) L(z);
+Ltvt= @(z) Lt(z);
+
+HtGsum = zeros(size(X));
+for nj = 1:Nj
+  G{nj} = H(X,nj);
+  HtGsum = HtGsum + Ht(G{nj},nj);
+end
+
+U = prox_dom(X);
+Y = Lqv(X);
+Z = Ltv(X);
+
+for iter = 1:maxiter
+
+  % for X
+  Xp = X;
+  X  = prox_indicator(X -gam1*(U + HtGsum + Lqvt(Y) + Ltvt(Z)), X0, Q0, sig);
+  dX = 2*X - Xp;
+  %dX = X;
+  dx = Xp - X;
+
+  % for U
+  u1 = U;
+  Up = U  + gam2*dX;
+  U  = Up - gam2*prox_dom(Up/gam2);
+  du = u1 - U;
+
+  % for G
+  HtGsum(:) = 0;
+  for nj = 1:Nj
+    g1 = G{nj};
+    Gp{nj} = G{nj}  + gam2*H(dX,nj);
+    G{nj}  = Gp{nj} - gam2*prox_nuc(Gp{nj}/gam2, w(nj)/gam2);
+    dg{nj} = g1 - G{nj};
+    HtGsum = HtGsum + Ht(G{nj},nj);
+  end
+
+  % for Y
+  y1 = Y;
+  Yp = Y + gam2*Lqv(dX);
+  Y  = lam_qv/(lam_qv+gam2)*Yp;
+  dy = y1 - Y;
+
+  % for Z
+  z1 = Z;
+  Zp = Z + gam2*Ltv(dX);
+  Z  = Zp- gam2*prox_l1(Zp/gam2, lam_tv/gam2);
+  dz = z1 - Z;
+
+  %% back-tracking
+  btc = 0.1/2/gam1*sum(dx(:).^2) + 0.1/2/gam2*(norm(du(:))^2 + norm(dy(:))^2 + norm(dz(:))^2);
+  btc = btc - 2*inp(dx, du + Lqvt(dy) + Ltvt(dz) );
+  for nj = 1:Nj
+    btc = btc + 0.1/2/gam2*norm(dg{nj}(:))^2 - 2*inp(H(dx,nj),dg{nj});
+  end
+  %if btc < 0
+  %  gam1 = gam1/2;
+  %  gam2 = gam2/2;
+  %end
+
+  %% residual
+  rx = dx/gam1 - du - Lqvt(dy) - Ltvt(dz);
+  for nj = 1:Nj
+    rx = rx - Ht(dg{nj});
+  end
+  pp = norm(rx(:))^2;
+
+  ru = du/gam2 - dx;
+  ry = dy/gam2 - Lqv(dx);
+  rz = dz/gam2 - Ltv(dx);
+  dds= sum(ru(:).^2) + sum(ry(:).^2) + sum(rz(:).^2);
+  for nj = 1:Nj
+    rg{nj} = rx - Ht(dg{nj});
+    dds = dds + sum(rg{nj}(:).^2);
+  end
+  dd = sqrt(dds)^2;
+
+  histo(iter) = pp+dd; 
+
+  % conv. check
+  %dx = mean((X(:) - Xp(:)).^2);
+  if mod(iter,verb)==0
+    fprintf('%d :: %e :: %e :: %e (%e,%e) \n',iter,pp,dd,btc,gam1,gam2);
+  end
+  if pp + dd < tol
+    break;
+  end 
+  if 2*pp < dd, gam1 = max(1e-5,gam1*(1-al)); gam2 = min(1.0,gam2/(1-al)); al = max(0.05,al*0.95);end
+  if 2*dd < pp, gam2 = max(1e-5,gam2*(1-al)); gam1 = min(1.0,gam1/(1-al)); al = max(0.05,al*0.95);end
+
+end
+
+

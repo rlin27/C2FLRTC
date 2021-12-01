@@ -1,0 +1,20 @@
+function [U,S,V] = rsvd(A,r)
+
+  [II JJ] = size(A);
+  Omega   = randn(JJ,r);
+  Omega   = sign(Omega).*sqrt(abs(Omega));
+
+  Y = A*Omega;
+  for q = 1:3
+    [Q R] = qr(Y,0);
+    Z = A'*Q;
+    [Q R] = qr(Z,0);
+    Y = A*Q;
+  end  
+  [Q R] = qr(Y,0);
+  B = Q'*A;
+  [Ut S V] = svds(B,r);
+  U = Q*Ut;
+
+
+

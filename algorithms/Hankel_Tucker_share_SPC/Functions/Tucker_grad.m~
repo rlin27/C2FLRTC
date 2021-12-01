@@ -1,0 +1,42 @@
+function [X, G, U, histo] = Tucker_grad(T,Q,G,U,gam,maxiter, tol, verb)
+
+  N  = length(U);
+  for n = 1:N
+    II(n) = size(U{n},1);
+    R(n) = size(U{n},2);
+  end
+
+  M = sum(Q(:));
+  X = tensor_allprod(G,U,0,R);
+  obj = (1/M)*norm(T(Q(:)==1) - X(Q(:)==1))^2;
+
+  al = 0.01;
+
+  for iter = 1:maxiter
+
+    for n = 1:N
+      S = Q.*(X-T);
+      dU{n} = unfold(tensor_allprod_exc(S,U,1,n,II),n)*unfold(G,n)';
+      U{n} = U{n} + al*dU{n};
+      X = tensor_allprod(G,U,0,R);
+    end
+
+    S = Q.*(X-T);
+    dG= tensor_allprod(S,U,1,II);
+    G = G + al*dG;
+    X = tensor_allprod(G,U,0,R);
+
+    obj2 = (1/M)*norm(T(Q(:)==1) - X(Q(:)==1))^2;
+    histo(iter)=obj2;
+
+    if mod(iter,verb) == 0
+      fprintf('iter %d:: %e :: %e \n',iter,obj2,abs(obj2-obj));%fflush(1);
+    end
+    if iter > 10 & abs(obj2 - obj) < tol
+      break;
+    else
+      obj = obj2;
+    end
+
+  end
+

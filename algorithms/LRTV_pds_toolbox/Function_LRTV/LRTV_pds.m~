@@ -1,0 +1,143 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% [X histo] = LRTV_pds(T,Q,al,w,be,lam,delta,dom,Gam,maxiter,tol,verb)
+%%
+%% This is a method to solve tensor completion problem based on smooth and low-rank properties of tensor.
+%% Its optimization problem is given by
+%%
+%% min_X  al*TV(X,w) + be*LR(X,lam), subject to dom(1) <= X <= dom(2), ||Q.*(T-X)||_F^2 <= delta.
+%%
+%% Total variation is defined by
+%%   TV(X,w) = sum ( sqrt( [w(1)*D(X,1)].^2 + ... + [w(N)*D(X,N)].^2 ) )
+%%     where, D(X,n) is partial differential operator with respect to n-th axis.
+%%
+%% Tensor nuclear-norm is defined by
+%%   LR(X,lam) = lam(1)*|| unfold(X,1) ||_nuclear + ... + lam(N)*|| unfold(X,N) ||_nuclear
+%%     where, unfold(X,n) is n-th mode matrix unfolding operator.
+%%
+%%
+%% Inputs:
+%%   -- T      : N-th order tensor (missing)
+%%   -- Q      : indicator tensor (missing 0, available 1)
+%%   -- al     : scalar weight for TV term
+%%   -- w      : vector weight for TV term
+%%   -- be     : scalar weight for LR term
+%%   -- lam    : vector weight for LR term
+%%   -- delta  : noise threshold
+%%   -- dom    : range constraint
+%%
+%% Optimization parameters:
+%%   -- maxiter: maximum number of iterations
+%%   -- tol    : threshold for convergence check
+%%   -- verb   : verbosity
+%%
+%% Outputs:
+%%   -- X      : estimated tensor
+%%   -- histo  : convergence curve of objective values
+%%
+%% This MATLAB code was implemented by Tatsuya Yokota.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function [X histo] = LRTV_pds(T,Q,al,w,be,lam,delta,dom,Gam,maxiter,tol,verb)
+
+  ep = 1e-16;
+
+  gam1 = Gam(1);
+  gam2 = Gam(2);
+
+  II = size(T);
+  NN = prod(II);
+  N  = length(II);
+
+  D    = @(z) z([2:end, end-1],:) - z;
+  Dt   = @(z) [-z(1,:); z(1:end-3,:) - z(2:end-2,:); z(end-2,:) - z(end-1,:) + z(end,:); z(end-1,:)-z(end,:)];
+  vect = @(Z) Z(:);
+  csum = @(Z) sum(cat(ndims(Z{1})+1,Z{:}),ndims(Z{1})+1);
+
+  % initialize
+  X = T;
+  U = X;
+  Y = zeros(NN,N);
+  Yp = zeros(NN,N);
+  sumLtY = zeros(II);
+  sumZ   = zeros(II);
+  nu_norm= 0;
+  for n = 1:N
+    Y(:,n) = w(n)*vect( fold(D(unfold(X,n)),n,II) );
+    sumLtY = sumLtY + w(n)*fold(Dt(unfold(reshape(Y(:,n),II),n)),n,II);
+    Z{n} = X;
+    sumZ = sumZ + Z{n};
+    nu_norm = nu_norm + lam(n)*sum(sqrt(svd(unfold(X,n)*unfold(X,n)')));
+  end
+
+  obj = (al*sum(sqrt(sum(Y.^2,2)),1) + be*nu_norm)/prod(II);
+  if verb
+    fprintf('iteration :: obj. value :: ||Q.*(T-X)||_F^2 :: ||X^{k+1} - X^{k}||_F^2  \n');
+  end
+
+  for iter = 1:maxiter
+
+    % update X
+    Xp = X;
+    X  = prox_indicator(X - gam1*(U + sumLtY + csum(Z)),T,Q,delta);
+    dX = 2*X - Xp;
+
+    % update U
+    Up= U + gam2*dX;
+    U = Up - gam2*prox_dom(Up/gam2,dom);
+
+    % update Y
+    Yp(:) = 0;
+    for n = 1:N
+      Yp(:,n) = Y(:,n) + gam2*w(n)*vect( fold(D(unfold(dX,n)),n,II) );
+    end
+    Y = Yp - gam2*prox_l12norm(Yp/gam2,al/gam2);
+
+    % update Z
+    for n = 1:N
+      Zp = unfold(Z{n} + gam2*dX,n);
+      Z{n} = fold(Zp - gam2*prox_nuc(Zp/gam2,be*lam(n)/gam2),n,II);
+    end
+
+    % calc_obj
+    sumLtY(:) = 0;
+    V      = zeros(II);
+    nu_norm= 0;
+    for n = 1:N
+      sumLtY = sumLtY + w(n)*fold(Dt(unfold(reshape(Y(:,n),II),n)),n,II);
+      V = V + (w(n)^2)*fold(D(unfold(X,n)),n,II).^2;
+      nu_norm = nu_norm + lam(n)*sum(sqrt(svd(unfold(X,n)*unfold(X,n)')));
+    end
+    obj2 = (al*sum(sqrt(V(:)),1) + be*nu_norm)/prod(II);
+
+    E = Q(:).*(T(:)-X(:));
+    E2= X(:) - Xp(:);
+    if mod(iter,verb) == 0
+      fprintf('iter %d :: %f :: %f :: %f \n',iter,obj2,norm(E(:))^2,norm(E2(:))^2);
+    end
+    histo(iter) = obj2;
+
+    if abs(obj-obj2) < tol
+      break;
+    else
+      obj = obj2;
+    end
+
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

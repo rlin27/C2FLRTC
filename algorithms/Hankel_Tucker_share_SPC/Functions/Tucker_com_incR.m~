@@ -1,0 +1,69 @@
+function [X, G, U] = Tucker_com_incRR(T,Q,G,U,delta,incR,Rho,maxiter,maxiter2,tol,verb,sv)
+
+  rho = Rho(1);
+
+  N  = length(U);
+  for n = 1:N
+    II(n) = size(U{n},1);
+    R(n) = size(U{n},2);
+  end
+
+  T = Q.*T;
+  GU= tensor_allprod(G,U,0,R);
+  X = GU;
+  Z = zeros(size(X));
+  obj = (1/sum(Q(:)))*norm(T(Q(:)==1) - X(Q(:)==1))^2;
+
+  for iter = 1:maxiter
+
+    for iter2 = 1:maxiter2    
+    for n = 1:N
+      Y{n} = unfold(tensor_allprod_exc(X+Z/rho,U,1,n,II),n);
+      [U{n},~,~] = svds(Y{n}*Y{n}',R(n));
+    end
+    end
+    G = tensor_allprod(X + Z/rho,U,1,II);
+    GU= tensor_allprod(G,U,0,R);
+
+    X = (T + rho*GU - Z) ./ (Q+rho);
+
+    Z = Z + rho*(X - GU);
+
+    obj2 = (1/sum(Q(:)))*norm(T(Q(:)==1) - X(Q(:)==1))^2;
+    c    = norm(X(:) - GU(:))^2;
+    
+    if mod(iter,verb) == 0
+      fprintf('iter %d:: %e :: %e :: %e :: %e :: R=[',iter,obj2,abs(obj2-obj),c,rho);%fflush(1);
+      for n = 1:N
+        fprintf('%d ',R(n));
+      end
+      fprintf('] \n');
+    end
+    if iter > 10 & abs(obj2 - obj) < tol & c < tol
+      
+      for n = 1:N
+        X2 = GU; X2(Q(:)==1) = T(Q(:)==1);
+        Y{n} = unfold(tensor_allprod_exc(X2,U,1,n,II),n);
+        E{n} = (eye(II(n)) - U{n}*U{n}') *Y{n};
+        errors(n) = norm(E{n}(:));
+      end
+      [value idd] = max(errors);
+      Ri(idd)= min(length(incRR{idd}),Ri(idd) + 1);
+      R(idd) = min(II(idd),incRR{idd}(Ri(idd)));
+      %break;
+    else
+      obj = obj2;
+    end
+    if obj2 < delta
+      break;
+    end
+    %rho = min(Rho(3),Rho(2)*rho);
+    rho = max(Rho(2),min(Rho(3),c));
+
+    if mod(iter,sv)==0
+      save('-mat',['saved/incR' num2str(iter) '.mat'],'G','U');
+    end
+
+  end
+
+
