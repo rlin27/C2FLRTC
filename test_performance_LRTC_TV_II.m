@@ -15,14 +15,14 @@ filename{8}='sailboat';
 
 %---- Fix the random seed ----
 rng(602)
-
+ss
 %---- C2F ----
-for ff=1:8  % load the test images
+for ff=8:8  % load the test images
     myName=sprintf('test_images/%s.bmp',filename{ff});  % get the path of the selected image
     A=imread(myName);  % read the original image
     figure(1); imshow(A); title('Original Figure'); % print the orignal image
     
-    myrate=0.90:0.05:0.90;  % set the missing rate
+    myrate=0.70:0.1:0.90;  % set the missing rate
     myResult=cell(2,numel(myrate));  % build a cell to store the results
     A=double(A)/255.0;  % normalize the values of the image
     

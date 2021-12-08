@@ -105,7 +105,7 @@ for ff=1:8  % load the test images
         diff_r{ff,iterate}=[diff_r{ff,iterate};0];
         
         % save the result got by pure LRTC
-        store_name=sprintf('pure_SPC_restore_%s.mat',filename{ff});
+        store_name=sprintf('pure_SPC_restore_%s_%d.mat',filename{ff},iterate);
         save(store_name,'Z_TRLRTV2_temp')
         
         % coarse level completion
@@ -133,13 +133,12 @@ for ff=1:8  % load the test images
                     
                     if i<6
                         %%%%%%%%%% STDC completion %%%%%%%%%%
-                        Qms = (B_pad ~= 0);
-                        Z_TRLRTV2_temp=MDT_Tucker_incR(B_pad,Qms, tau, param);
+                        Qms = (B_temp ~= 0);
+                        Z_TRLRTV2_patch=MDT_Tucker_incR(B_temp, Qms, tau, param);
                     else
                         %%%%%%%%%% STDC completion %%%%%%%%%%
-                        Qms = (B_pad ~= 0);
-                        Z_TRLRTV2_temp=MDT_Tucker_incR(B_pad,Qms, tau, param);
-                        
+                        Qms = (B_temp ~= 0);
+                        Z_TRLRTV2_patch=MDT_Tucker_incR(B_temp, Qms, tau, param);
                         Z_TRLRTV2_patch=imresize(Z_TRLRTV2_patch,[size(B_temp,1),size(B_temp,2)]);
                     end
                     
