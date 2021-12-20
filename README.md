@@ -2,14 +2,14 @@
 
 
 ## C2F-LRTC
-![](./figures/flowchart.jpg)
+![](./figures/workflow.jpg)
 
 ## Advantage
-+ A general and intuitive coarse-to-fine strategy that stimulates the potential power of existing LRTC methods for color image restoration tasks is proposed, in which the image of poor quality is restored by taking a proper balance between the potentially low- and high-rank parts.
++ A general and intuitive C2F strategy is proposed, which effectively boosts the performance of existing LRTC methods by seeking proper local ranks for both the low- and high-rank parts, respectively.
 
-+ By exploring the data from both coarse and fine viewpoint, the proposed C2F strategy allows LRTC methods to capture both the global and local structure of the data.
++ Utilization of the data from both coarse and fine hierarchies, thus capturing both the global and local data structures simultaneously.
 
-+ Extensive experiments exemplify that the proposed C2F can improve the performance of the existing LRTC methods. In addition, the ablation study demonstrates the necessity and rationality of C2F.
++ Extensive experiments and ablation study for validating C2F, which demonstrate the superiority of C2F in image completion tasks.
 
 ## Running Codes
 Our experiments were all done on an Intel(R) Core(TM) i5-
@@ -98,16 +98,29 @@ end
 
 ## Experimental Results
 
+### Eight Benchmarks
+![](./figures/benchmark-2.png)
+
 ### Pure LRTC vs. C2F-LRTC
+Table below summarizes the comparison results of pure LRTC and their C2F version under different missing ratios. For easy reading, the C2F-LRTC results are marked blue, and are put below the corresponding pure LRTC method.
+
+![](./figures/exp_summary.png)
+
+Figure below shows the restoration results of facade and sailboat under $90\%$ missing ratio. These two images are representative, since the image facade has regular patterns while the image sailboat contains both the details-lacking parts (e.g., the sky and the lake) and the complex objects (e.g., the trees and the boat). It is noticeable that C2F-LRTC restore both two kinds of images with richer details. In summary, C2F can steadily improve the performance of existing LRTC methods and retain more details.
+
+![](./figures/viz_compare.png)
 
 ### The Effectiveness of Gradual Refinement
+we validate the effectiveness of the successive fine-grained completion by comparing the restoration results obtained by pure LRTC, C2F-LRTC, and the Short-Cut C2F-LRTC, which only contains the coarse stage at the beginning and the last fine stage with the smallest patches.
+
+The results are displayed in the table below, where we employ the LRTC-TV-II algorithm and set the missing ratio as $90\%$. For the Short-Cut C2F, we set a larger patch replace threshold $\epsilon = 0.3$ to ensure that the newly completed patches in the last fine stage can replace their counterparts in the coarse stage. For the remaining hyper-parameters, we keep them the same as in the original C2F strategy.
+
+![](./figures/ablation_short_cut.png)
 
 ### Local Rank Analysis
-The relative patch rank for patches of different sizes. In each column, the average relative patch rank decreases as the patch size becomes smaller, which is consistent with our experimental settings. 
+We also investigate the correctness of the setting in our method that we have assumed smaller local ranks along with decreasing patch sizes. We compute the average relative patch ranks (RPR) for patches of different sizes in the ground truth. The RPR is defined as the ratio between the number of singular values, which accounts for $90\%$ of the total singular values summation, and the patch size. Along this side, the patch size can be ignored when comparing the patch ranks.
 
-The relative patch rank is defined as the ratio between the number of singular values, the addition of which accounts for 90% of the total singular values summation, and the patch size. The patch size can be ignored along this side while comparing the patch rank.
-
-![](./figures/local_rank.png) 
+![](./figures/ablation_rank.png) 
 
 ## License
 C2F is released under MIT License.
