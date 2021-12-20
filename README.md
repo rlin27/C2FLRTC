@@ -1,4 +1,4 @@
-# Coarse to Fine: Image Restoration Boosted by Multi-Scale Low-Rank Tensor Completion Strategy (Link)
+# Coarse to Fine: Image Restoration Boosted by Multi-Scale Low-Rank Tensor Completion (Link)
 
 
 ## C2F-LRTC
